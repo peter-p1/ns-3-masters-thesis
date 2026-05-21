@@ -1,4 +1,4 @@
-# ns-3-ntn — NB-IoT over NTN (Thesis Simulator)
+# NB-IoT over NTN (Thesis Simulator)
 
 Thesis simulator combining two ns-3 extensions to model **NB-IoT over
 Non-Terrestrial Networks**:
