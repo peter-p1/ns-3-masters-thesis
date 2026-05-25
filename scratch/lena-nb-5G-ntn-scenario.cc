@@ -531,21 +531,13 @@ main (int argc, char *argv[])
   // Per-UE start jitter so UEs don't all transmit simultaneously
   double maxStartJitterMs = 1000.0;
 
-  // UDP-echo packets per UE. Default 1e6 = effectively unlimited (one ping
-  // every packetInterval until simTime expires). Set to 1 for "single-shot"
-  // tests that minimise sustained RRC churn at high UE counts.
+  // UDP-echo packets per UE. Default 1e6 = effectively unlimited
   uint32_t maxPacketsPerUe = 1000000;
 
-  // Heavy LTE module text-stats files (Dl/Ul {Phy,Mac,Rlc,Pdcp,RsrpSinr...}
-  // Stats.txt) are not consumed by the UE-scaling analysis. DlRsrpSinrStats
-  // alone reaches 200+ MB at 250 UEs / 60 s. Off by default; pass
   // --enableLteStatsLogs=true to emit them when manually inspecting a run.
-  bool enableLteStatsLogs = false;
-  // A3 RSRP is terrestrial-only and ill-suited for the high relative velocity
-  // of LEO eNBs (ping-pong / late HO). When ntnHoEnabled=true the LTE module
-  // HO algorithm is replaced by NoOp and a custom geometric (location/time-
-  // based) trigger drives the X2 handover from the scenario, mirroring the
-  // D1/D2/T1 conditions of 3GPP Rel-17 NTN CHO (TR 38.821 §7.3.2.1).
+  bool enableLteStatsLogs = false; // false saves disk space
+
+  // custom handover configuration
   std::string handoverAlgorithm = "ns3::A3RsrpHandoverAlgorithm";
   double handoverHysteresisDb = 3.0;
   double handoverTimeToTriggerMs = 256.0;
@@ -841,11 +833,7 @@ main (int argc, char *argv[])
     }
     else if (ueNodes.GetN() > 1)
     {
-      // Cluster UEs around the constellation's sub-satellite points so a fair
-      // share start with a visible satellite. Each UE is offset around one of
-      // the satellite footprints (round-robin), within ~±5° of the sub-sat
-      // point — close enough for elevation > 10° at LEO, far enough that UEs
-      // don't all collide on the same cell at t=0.
+      // For multiple UEs, spread them out in a pattern around the satellite(s) to get a variety of conditions.
       Ptr<GeocentricConstantPositionMobilityModel> satMob =
           enbNodes.Get(i % enbNodes.GetN())->GetObject<GeocentricConstantPositionMobilityModel>();
       if (useOrbitalModel && satMob)
@@ -957,9 +945,7 @@ main (int argc, char *argv[])
     }
     if (det) g_nprachDetectedCount[imsi]++; else g_nprachMissedCount[imsi]++;
 
-    // Passive NPRACH preamble-collision tracking: bin attempts into the current
-    // NPRACH opportunity window and assign a random subcarrier from the pool.
-    // If two UEs in the same window pick the same subcarrier, count a collision.
+    // NPRACH preamble-collision tracking
     int64_t bucket = static_cast<int64_t>(Simulator::Now().GetMilliSeconds() / g_nprachOpportunityMs);
     int sub = static_cast<int>(g_nprachRng->GetInteger(0, g_nprachNumSubcarriers - 1));
     auto& subMap = g_collisionWindow[bucket];
@@ -1007,11 +993,7 @@ main (int argc, char *argv[])
   ApplicationContainer clientApps;
   ApplicationContainer serverApps;
 
-  // Set up data transmission. The "jitter" applies to BOTH the LTE attach
-  // (which triggers cell selection + RACH) and the UDP-echo client start.
-  // Spreading the attach is essential — applying jitter only to the UDP
-  // client lets all 250 UEs RACH at sim init and overwhelm the LTE state
-  // machines (UE-RRC IDLE_CONNECTING race in lte-ue-rrc.cc:699 at ~0.27 s).
+  // Per-UE attach/app-start jitter randomization so they don't all hit the satellite at once.
   Ptr<UniformRandomVariable> startJitterRng = CreateObject<UniformRandomVariable>();
   startJitterRng->SetAttribute("Min", DoubleValue(0.0));
   startJitterRng->SetAttribute("Max", DoubleValue(maxStartJitterMs / 1000.0));
@@ -1089,7 +1071,6 @@ main (int argc, char *argv[])
     std::cerr << "Warning: Failed to create log directory" << std::endl;
   }  
 
-  
 
   // Print NTN configuration will be emitted after opening trace file
 
